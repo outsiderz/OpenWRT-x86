@@ -70,6 +70,31 @@ jobs:
           test "$required" = "$core_version"
           cp "$core" "$RUNNER_TEMP/forkop-packages/"
 
+      - name: Checkout Argon theme sources
+        uses: actions/checkout@v5
+        with:
+          repository: jerrykuku/luci-theme-argon
+          path: upstream/luci-theme-argon
+          persist-credentials: false
+
+      - name: Build Argon packages for OpenWrt 25.12.6
+        shell: bash
+        run: |
+          sdk="https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/x86/64/openwrt-sdk-${OPENWRT_VERSION}-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+          archive="$RUNNER_TEMP/argon-sdk.tar.zst"
+          sdk_dir="$RUNNER_TEMP/argon-sdk"
+          curl --fail --location --retry 3 "$sdk" -o "$archive"
+          mkdir -p "$sdk_dir"
+          tar --zstd -xf "$archive" -C "$sdk_dir" --strip-components=1
+          cd "$sdk_dir"
+          ./scripts/feeds update luci
+          rm -rf package/luci-theme-argon
+          cp -a "$GITHUB_WORKSPACE/upstream/luci-theme-argon" package/luci-theme-argon
+          make package/luci-theme-argon/compile -j"$(nproc)"
+          mkdir -p "$RUNNER_TEMP/argon-packages"
+          find bin/packages -type f \\( -name 'luci-theme-argon_*.apk' -o -name 'luci-i18n-argon-config-ru_*.apk' \\) -exec cp -t "$RUNNER_TEMP/argon-packages" {} +
+          test -n "$(find "$RUNNER_TEMP/argon-packages" -type f -name 'luci-theme-argon_*.apk' -print -quit)"
+
       - name: Download OpenWrt ImageBuilder
         shell: bash
         run: |
@@ -81,7 +106,14 @@ jobs:
           tar --zstd -xf "$archive" -C "$RUNNER_TEMP/imagebuilder" --strip-components=1
           cp "$RUNNER_TEMP/forkop-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
           cp "$RUNNER_TEMP/forkop-core/"*_full_x86_64.apk "$RUNNER_TEMP/imagebuilder/packages/"
+          cp "$RUNNER_TEMP/argon-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
           chmod 0755 files/etc/uci-defaults/99-home-router-network
+          ls -lh "$RUNNER_TEMP/imagebuilder/packages/"*.apk
+          (
+            cd "$RUNNER_TEMP/imagebuilder/packages"
+            ../staging_dir/host/bin/apk mkndx --allow-untrusted --output packages.adb *.apk
+          )
+          test -s "$RUNNER_TEMP/imagebuilder/packages/packages.adb"
 
       - name: Build UEFI EXT4 firmware
         working-directory: ${{ runner.temp }}/imagebuilder
