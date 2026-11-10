@@ -82,9 +82,12 @@ jobs:
           mkdir -p "$sdk_dir"
           tar --zstd -xf "$archive" -C "$sdk_dir" --strip-components=1
           cd "$sdk_dir"
-          ./scripts/feeds update luci
+          export TERM=xterm
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
           rm -rf package/luci-theme-argon
           cp -a "$GITHUB_WORKSPACE/upstream/luci-theme-argon" package/luci-theme-argon
+          make defconfig
           make package/luci-theme-argon/compile -j"$(nproc)"
           mkdir -p "$RUNNER_TEMP/argon-packages"
           find bin/packages -type f \( -name 'luci-theme-argon_*.apk' -o -name 'luci-i18n-argon-config-ru_*.apk' \) -exec cp -t "$RUNNER_TEMP/argon-packages" {} +
