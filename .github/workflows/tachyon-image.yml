@@ -23,9 +23,8 @@ jobs:
 
       - name: Install build prerequisites
         run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           sudo apt-get update
-          sudo apt-get install -y build-essential curl fakeroot file gawk git jq make patch perl python3 rsync tar unzip util-linux wget xz-utils zstd
+          sudo apt-get install -y curl file gawk jq make perl python3 rsync tar unzip wget xz-utils zstd
 
       - name: Resolve Tachyon release
         id: tachyon_release
