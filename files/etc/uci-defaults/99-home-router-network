@@ -1,0 +1,32 @@
+#!/bin/sh
+# First-boot network defaults for the B75M-A x86-64 router.
+# eth0 is the LAN-side port (br-lan); eth1 is the DHCP WAN port.
+uci -q batch <<'UCI'
+set network.lan.device='br-lan'
+set network.lan.proto='static'
+set network.lan.ipaddr='10.10.0.2'
+set network.lan.netmask='255.255.255.0'
+set network.lan.delegate='0'
+set network.wan.device='eth1'
+set network.wan.proto='dhcp'
+set network.home_lan='route'
+set network.home_lan.interface='lan'
+set network.home_lan.target='10.10.10.0'
+set network.home_lan.netmask='255.255.255.0'
+set network.home_lan.gateway='10.10.0.1'
+set network.wan6='interface'
+set network.wan6.proto='none'
+set dhcp.lan.ignore='1'
+set dhcp.lan.ra='disabled'
+set dhcp.lan.dhcpv6='disabled'
+set dhcp.lan.ndp='disabled'
+delete network.globals.ula_prefix
+set luci.main.lang='ru'
+set luci.main.mediaurlbase='/luci-static/argon'
+commit network
+commit dhcp
+commit luci
+UCI
+/etc/init.d/odhcpd disable 2>/dev/null || true
+/etc/init.d/odhcpd stop 2>/dev/null || true
+exit 0
