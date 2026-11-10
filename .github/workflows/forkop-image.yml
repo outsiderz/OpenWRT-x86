@@ -42,13 +42,28 @@ jobs:
           path: upstream/forkop
           persist-credentials: false
 
-      - name: Build Forkop packages for OpenWrt 25.12.6
+      - name: Download and verify Forkop release APKs
         shell: bash
         run: |
-          sdk="https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/x86/64/openwrt-sdk-${OPENWRT_VERSION}-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
-          mkdir -p "$RUNNER_TEMP/forkop-packages"
-          cd upstream/forkop
-          APK_SDK_URL="$sdk" IPK_SDK_URL="$sdk" ./build.sh "${{ steps.forkop_release.outputs.version }}" "$RUNNER_TEMP/forkop-packages"
+          dir="$RUNNER_TEMP/forkop-packages"
+          mkdir -p "$dir"
+          tag="${{ steps.forkop_release.outputs.tag }}"
+          gh release download "$tag" --repo ushan0v/forkop \
+            --pattern 'forkop_*_all.apk' \
+            --pattern 'luci-app-forkop_*_all.apk' \
+            --pattern 'luci-i18n-forkop-ru_*_all.apk' \
+            --pattern SHA256SUMS --dir "$dir"
+          release_json="$(gh api "repos/ushan0v/forkop/releases/tags/$tag")"
+          for package in "$dir"/*.apk; do
+            name="$(basename "$package")"
+            expected="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest | sub("^sha256:"; "")' <<< "$release_json")"
+            test -n "$expected"
+            actual="$(sha256sum "$package" | awk '{print $1}')"
+            test "$expected" = "$actual"
+          done
+          for pattern in 'forkop_*_all.apk' 'luci-app-forkop_*_all.apk' 'luci-i18n-forkop-ru_*_all.apk'; do
+            test -n "$(find "$dir" -maxdepth 1 -type f -name "$pattern" -print -quit)"
+          done
 
       - name: Download and verify sing-box-forkop FULL
         shell: bash
