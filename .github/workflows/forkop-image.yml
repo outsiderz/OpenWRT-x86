@@ -145,6 +145,40 @@ jobs:
             '*/staging_dir/host/lib/*'
           apk_tool="$apk_root/bin/apk"
           test -x "$apk_tool"
+          for forkop_package in "$RUNNER_TEMP/forkop-packages/"forkop_*.apk; do
+            forkop_metadata="$("$apk_tool" adbdump "$forkop_package")"
+            package_field() {
+              local field="$1" line
+              line="$(printf "%s\n" "$forkop_metadata" | grep "^  $field:" | head -n1)"
+              printf "%s" "${line#*: }"
+            }
+            package_name="$(package_field name)"
+            package_version="$(package_field version)"
+            package_arch="$(package_field arch)"
+            package_description="$(package_field description)"
+            package_license="$(package_field license)"
+            package_depends="$(package_field depends)"
+            package_url="$(package_field url)"
+            test "$package_name" = "forkop"
+            test -n "$package_version"
+            test -n "$package_arch"
+            test -n "$package_depends"
+            forkop_stage="$RUNNER_TEMP/forkop-backend-root"
+            mkdir -p "$forkop_stage"
+            "$apk_tool" extract --allow-untrusted --destination "$forkop_stage" "$forkop_package"
+            rm -f "$RUNNER_TEMP/imagebuilder/packages/$(basename "$forkop_package")"
+            "$apk_tool" mkpkg \
+              --info "name:$package_name" \
+              --info "version:$package_version" \
+              --info "arch:$package_arch" \
+              --info "description:$package_description" \
+              --info "license:$package_license" \
+              --info "origin:ushan0v/forkop" \
+              --info "url:$package_url" \
+              --info "depends:$package_depends" \
+              --files "$forkop_stage" \
+              --output "$RUNNER_TEMP/imagebuilder/packages/$package_name-$package_version.apk"
+          done
           for package in "$RUNNER_TEMP/imagebuilder/packages/"*.apk; do
             metadata="$("$apk_tool" adbdump "$package")"
             package_name="$(printf "%s\n" "$metadata" | grep "^  name:" | head -n1)"
