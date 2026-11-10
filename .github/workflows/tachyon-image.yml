@@ -160,6 +160,40 @@ jobs:
             --script "pre-deinstall:$core_scripts/pre-deinstall" \
             --files "$core_stage" \
             --output "$RUNNER_TEMP/imagebuilder/packages/tachyon-core-$core_version.apk"
+          for tachyon_package in "$RUNNER_TEMP/tachyon-packages/"tachyon_*.apk; do
+            tachyon_metadata="$("$apk_tool" adbdump "$tachyon_package")"
+            package_field() {
+              local field="$1" line
+              line="$(printf "%s\n" "$tachyon_metadata" | grep "^  $field:" | head -n1)"
+              printf "%s" "${line#*: }"
+            }
+            package_name="$(package_field name)"
+            package_version="$(package_field version)"
+            package_arch="$(package_field arch)"
+            package_description="$(package_field description)"
+            package_license="$(package_field license)"
+            package_depends="$(package_field depends)"
+            package_url="$(package_field url)"
+            test "$package_name" = "tachyon"
+            test -n "$package_version"
+            test -n "$package_arch"
+            test -n "$package_depends"
+            tachyon_stage="$RUNNER_TEMP/tachyon-backend-root"
+            mkdir -p "$tachyon_stage"
+            "$apk_tool" extract --allow-untrusted --destination "$tachyon_stage" "$tachyon_package"
+            rm -f "$RUNNER_TEMP/imagebuilder/packages/$(basename "$tachyon_package")"
+            "$apk_tool" mkpkg \
+              --info "name:$package_name" \
+              --info "version:$package_version" \
+              --info "arch:$package_arch" \
+              --info "description:$package_description" \
+              --info "license:$package_license" \
+              --info "origin:Dushnilin/tachyon" \
+              --info "url:$package_url" \
+              --info "depends:$package_depends" \
+              --files "$tachyon_stage" \
+              --output "$RUNNER_TEMP/imagebuilder/packages/$package_name-$package_version.apk"
+          done
           for package in "$RUNNER_TEMP/imagebuilder/packages/"*.apk; do
             metadata="$("$apk_tool" adbdump "$package")"
             package_name="$(printf "%s\n" "$metadata" | grep "^  name:" | head -n1)"
