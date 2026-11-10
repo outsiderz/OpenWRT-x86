@@ -34,20 +34,28 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout Tachyon sources
-        uses: actions/checkout@v5
-        with:
-          repository: Dushnilin/tachyon
-          ref: ${{ steps.tachyon_release.outputs.tag }}
-          path: upstream/tachyon
-          persist-credentials: false
-
-      - name: Build Tachyon packages for OpenWrt 25.12.6
+      - name: Download and verify Tachyon release APKs
+        shell: bash
         run: |
-          sdk="https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/x86/64/openwrt-sdk-${OPENWRT_VERSION}-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
-          mkdir -p "$RUNNER_TEMP/tachyon-packages"
-          cd upstream/tachyon
-          APK_SDK_URL="$sdk" IPK_SDK_URL="$sdk" ./build.sh "${{ steps.tachyon_release.outputs.version }}" "$RUNNER_TEMP/tachyon-packages"
+          dir="$RUNNER_TEMP/tachyon-packages"
+          mkdir -p "$dir"
+          tag="${{ steps.tachyon_release.outputs.tag }}"
+          gh release download "$tag" --repo Dushnilin/tachyon \
+            --pattern 'tachyon_*.apk' \
+            --pattern 'luci-app-tachyon_*.apk' \
+            --pattern 'luci-i18n-tachyon-ru_*.apk' \
+            --pattern sha256sums.txt --dir "$dir"
+          release_json="$(gh api "repos/Dushnilin/tachyon/releases/tags/$tag")"
+          for package in "$dir"/*.apk; do
+            name="$(basename "$package")"
+            expected="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest | sub("^sha256:"; "")' <<< "$release_json")"
+            test -n "$expected"
+            actual="$(sha256sum "$package" | awk '{print $1}')"
+            test "$expected" = "$actual"
+          done
+          for pattern in 'tachyon_*.apk' 'luci-app-tachyon_*.apk' 'luci-i18n-tachyon-ru_*.apk'; do
+            test -n "$(find "$dir" -maxdepth 1 -type f -name "$pattern" -print -quit)"
+          done
 
       - name: Download and verify tachyon-core
         shell: bash
