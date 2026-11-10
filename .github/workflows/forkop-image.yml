@@ -162,7 +162,6 @@ jobs:
             test "$package_name" = "forkop"
             test -n "$package_version"
             test -n "$package_arch"
-            test -n "$package_depends"
             forkop_stage="$RUNNER_TEMP/forkop-backend-root"
             mkdir -p "$forkop_stage"
             "$apk_tool" extract --allow-untrusted --destination "$forkop_stage" "$forkop_package"
@@ -175,7 +174,7 @@ jobs:
               --info "license:$package_license" \
               --info "origin:ushan0v/forkop" \
               --info "url:$package_url" \
-              --info "depends:$package_depends" \
+              --info "depends:libc" \
               --files "$forkop_stage" \
               --output "$RUNNER_TEMP/imagebuilder/packages/$package_name-$package_version.apk"
           done
@@ -204,7 +203,7 @@ jobs:
         working-directory: ${{ runner.temp }}/imagebuilder
         run: |
           make image PROFILE=generic \
-            PACKAGES="luci-ssl luci-i18n-base-ru luci-theme-argon luci-app-argon-config luci-i18n-argon-config-ru kmod-r8169 r8169-firmware forkop luci-app-forkop luci-i18n-forkop-ru sing-box-forkop" \
+            PACKAGES="luci-ssl luci-i18n-base-ru luci-theme-argon luci-app-argon-config luci-i18n-argon-config-ru kmod-r8169 r8169-firmware ca-bundle ip-full kmod-nft-nat kmod-nft-tproxy uclient-fetch ucode-mod-fs ucode-mod-resolv ucode-mod-socket ucode-mod-ubus ucode-mod-uci ucode-mod-uloop forkop luci-app-forkop luci-i18n-forkop-ru sing-box-forkop" \
             FILES="${{ github.workspace }}/files" \
             EXTRA_IMAGE_NAME="forkop"
 
