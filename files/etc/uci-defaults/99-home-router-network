@@ -1,6 +1,8 @@
 #!/bin/sh
 # First-boot network defaults for the B75M-A x86-64 router.
 # eth0 is the LAN-side port (br-lan); eth1 is the DHCP WAN port.
+# uci-defaults can run again after sysupgrade; keep the marker in /etc/config/system.
+[ "$(uci -q get system.@system[0].home_router_defaults 2>/dev/null)" = "1" ] && exit 0
 uci -q batch <<'UCI'
 set network.lan.device='br-lan'
 set network.lan.proto='static'
@@ -21,9 +23,11 @@ set dhcp.lan.ra='disabled'
 set dhcp.lan.dhcpv6='disabled'
 set dhcp.lan.ndp='disabled'
 delete network.globals.ula_prefix
+set system.@system[0].home_router_defaults='1'
 set luci.main.lang='ru'
 set luci.main.mediaurlbase='/luci-static/argon'
 commit network
+commit system
 commit dhcp
 commit luci
 UCI
