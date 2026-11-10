@@ -21,10 +21,13 @@ The first-boot defaults are based on the supplied LuCI screenshot:
 - Static route to `10.10.10.0/24` via `10.10.0.1`.
 - DHCP and IPv6 router advertisements disabled on OpenWrt.
 - Argon LuCI theme and Russian LuCI language packages included.
+- A UCI marker prevents the first-boot defaults from overwriting later saved settings after subsequent upgrades.
 
 RB5009 remains responsible for client DHCP and needs its own default route through `10.10.0.2`, plus the required DNS/firewall policy for AdGuard Home at `10.10.10.119`. These workflows do not change RB5009.
 
 No VPN credentials, private keys, subscription URLs, or provider secrets are stored in this repository or embedded in the images. Add and configure those on the router after installation.
+
+For firmware upgrades, use LuCI **System → Backup / Flash Firmware**, generate a backup first, select the matching x86/64 UEFI EXT4 combined image, and leave **Keep settings** enabled for compatible 25.12.x upgrades. These images already include the selected routing package and NIC driver, so they are part of each build; settings are preserved separately by sysupgrade. Do not use the combined EFI image with `dd` for an upgrade. Keep a copy of the backup off the router.
 
 ## Hardware notes
 
