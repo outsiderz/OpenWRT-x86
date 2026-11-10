@@ -123,7 +123,7 @@ jobs:
           test -n "$expected"
           actual="$(sha256sum "$sdk_archive" | awk '{print $1}')"
           test "$expected" = "$actual"
-          apk_path="$(tar --zstd -tf "$sdk_archive" | grep '/staging_dir/host/bin/apk)"
+          apk_path="$(tar --zstd -tf "$sdk_archive" | grep -F /staging_dir/host/bin/apk)"
           test -n "$apk_path"
           apk_root="$RUNNER_TEMP/apk-indexer"
           mkdir -p "$apk_root"
