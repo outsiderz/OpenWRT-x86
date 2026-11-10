@@ -119,19 +119,36 @@ jobs:
           cp "$RUNNER_TEMP/forkop-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
           cp "$RUNNER_TEMP/forkop-core/"*_full_x86_64.apk "$RUNNER_TEMP/imagebuilder/packages/"
           cp "$RUNNER_TEMP/argon-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
-          cp "$RUNNER_TEMP/argon-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
           chmod 0755 files/etc/uci-defaults/99-home-router-network
           sdk="https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
-          archive="$RUNNER_TEMP/openwrt-sdk-25.12.3.tar.zst"
+          sdk_archive="$RUNNER_TEMP/openwrt-sdk-25.12.3.tar.zst"
           checksums="$RUNNER_TEMP/openwrt-sdk-25.12.3.sha256sums"
-          curl --fail --location --retry 3 "$sdk" -o "$archive"
+          curl --fail --location --retry 3 "$sdk" -o "$sdk_archive"
           curl --fail --location --retry 3 "https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/sha256sums" -o "$checksums"
           filename="$(basename "$sdk")"
           expected="$(awk -v n="$filename" '$2 == n || $2 == "*" n {print $1; exit}' "$checksums")"
           test -n "$expected"
-          actual="$(sha256sum "$archive" | awk '{print $1}')"
+          actual="$(sha256sum "$sdk_archive" | awk '{print $1}')"
           test "$expected" = "$actual"
-          apk_path="$(tar --zstd -tf "$archive" | grep -m1 '/staging_dir/host/bin/apk
+          apk_path="$(tar --zstd -tf "$sdk_archive" | grep -m1 '/staging_dir/host/bin/apk$')"
+          test -n "$apk_path"
+          apk_root="$RUNNER_TEMP/apk-indexer"
+          mkdir -p "$apk_root"
+          tar --zstd -xf "$sdk_archive" -C "$apk_root" --strip-components=3 --wildcards \
+            '*/staging_dir/host/bin/apk' \
+            '*/staging_dir/host/bin/.apk.bin' \
+            '*/staging_dir/host/lib/*'
+          apk_tool="$apk_root/bin/apk"
+          test -x "$apk_tool"
+          make -s -C "$RUNNER_TEMP/imagebuilder" _check_keys
+          (
+            cd "$RUNNER_TEMP/imagebuilder/packages"
+            "$apk_tool" mkndx \
+              --keys-dir "$RUNNER_TEMP/imagebuilder/keys" \
+              --sign "$RUNNER_TEMP/imagebuilder/keys/local-private-key.pem" \
+              --allow-untrusted --output packages.adb *.apk
+          )
+          test -s "$RUNNER_TEMP/imagebuilder/packages/packages.adb"
       - name: Build UEFI EXT4 firmware
         working-directory: ${{ runner.temp }}/imagebuilder
         run: |
