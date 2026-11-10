@@ -109,10 +109,60 @@ jobs:
           cp "$RUNNER_TEMP/argon-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
           cp "$RUNNER_TEMP/argon-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
           chmod 0755 files/etc/uci-defaults/99-home-router-network
-          ls -lh "$RUNNER_TEMP/imagebuilder/packages/"*.apk
+          sdk="https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+          archive="$RUNNER_TEMP/openwrt-sdk-25.12.3.tar.zst"
+          checksums="$RUNNER_TEMP/openwrt-sdk-25.12.3.sha256sums"
+          curl --fail --location --retry 3 "$sdk" -o "$archive"
+          curl --fail --location --retry 3 "https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/sha256sums" -o "$checksums"
+          filename="$(basename "$sdk")"
+          expected="$(awk -v n="$filename" '$2 == n || $2 == "*" n {print $1; exit}' "$checksums")"
+          test -n "$expected"
+          actual="$(sha256sum "$archive" | awk '{print $1}')"
+          test "$expected" = "$actual"
+          apk_path="$(tar --zstd -tf "$archive" | grep -m1 '/staging_dir/host/bin/apk
+      - name: Build UEFI EXT4 firmware
+        working-directory: ${{ runner.temp }}/imagebuilder
+        run: |
+          make image PROFILE=generic \
+            PACKAGES="luci-ssl luci-i18n-base-ru luci-theme-argon luci-app-argon-config luci-i18n-argon-config-ru kmod-r8169 r8169-firmware tachyon luci-app-tachyon luci-i18n-tachyon-ru tachyon-core" \
+            FILES="${{ github.workspace }}/files" \
+            EXTRA_IMAGE_NAME="tachyon"
+
+      - name: Prepare firmware artifact
+        shell: bash
+        working-directory: ${{ runner.temp }}/imagebuilder
+        run: |
+          image="$(find bin -type f -name "openwrt-${OPENWRT_VERSION}-x86-64-generic*ext4-combined-efi.img.gz" -print -quit)"
+          test -n "$image"
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          cp "$image" "$GITHUB_WORKSPACE/output/openwrt-${OPENWRT_VERSION}-x86-64-tachyon-core-ext4-efi.img.gz"
+          cd "$GITHUB_WORKSPACE/output"
+          sha256sum *.img.gz > SHA256SUMS
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-${{ env.OPENWRT_VERSION }}-tachyon-core-x86-64
+          path: output/*
+          if-no-files-found: error
+          retention-days: 30
+)"
+          test -n "$apk_path"
+          apk_root="$RUNNER_TEMP/apk-indexer"
+          mkdir -p "$apk_root"
+          tar --zstd -xf "$archive" -C "$apk_root" --strip-components=3 --wildcards \
+            '*/staging_dir/host/bin/apk' \
+            '*/staging_dir/host/bin/.apk.bin' \
+            '*/staging_dir/host/lib/*'
+          apk_tool="$apk_root/bin/apk"
+          test -x "$apk_tool"
+          make -s -C "$RUNNER_TEMP/imagebuilder" _check_keys
           (
             cd "$RUNNER_TEMP/imagebuilder/packages"
-            ../staging_dir/host/bin/apk mkndx --allow-untrusted --output packages.adb *.apk
+            "$apk_tool" mkndx \
+              --keys-dir "$RUNNER_TEMP/imagebuilder/keys" \
+              --sign "$RUNNER_TEMP/imagebuilder/keys/local-private-key.pem" \
+              --allow-untrusted --output packages.adb *.apk
           )
           test -s "$RUNNER_TEMP/imagebuilder/packages/packages.adb"
 
