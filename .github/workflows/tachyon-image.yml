@@ -177,7 +177,6 @@ jobs:
             test "$package_name" = "tachyon"
             test -n "$package_version"
             test -n "$package_arch"
-            test -n "$package_depends"
             tachyon_stage="$RUNNER_TEMP/tachyon-backend-root"
             mkdir -p "$tachyon_stage"
             "$apk_tool" extract --allow-untrusted --destination "$tachyon_stage" "$tachyon_package"
@@ -190,7 +189,7 @@ jobs:
               --info "license:$package_license" \
               --info "origin:Dushnilin/tachyon" \
               --info "url:$package_url" \
-              --info "depends:$package_depends" \
+              --info "depends:libc" \
               --files "$tachyon_stage" \
               --output "$RUNNER_TEMP/imagebuilder/packages/$package_name-$package_version.apk"
           done
@@ -219,7 +218,7 @@ jobs:
         working-directory: ${{ runner.temp }}/imagebuilder
         run: |
           make image PROFILE=generic \
-            PACKAGES="luci-ssl luci-i18n-base-ru luci-theme-argon luci-app-argon-config luci-i18n-argon-config-ru kmod-r8169 r8169-firmware tachyon luci-app-tachyon luci-i18n-tachyon-ru tachyon-core" \
+            PACKAGES="luci-ssl luci-i18n-base-ru luci-theme-argon luci-app-argon-config luci-i18n-argon-config-ru kmod-r8169 r8169-firmware bind-dig ca-bundle coreutils-base64 coreutils-timeout curl ip-full kmod-inet-diag kmod-nft-tproxy kmod-tun openssl-util ucode-mod-fs ucode-mod-uci tachyon luci-app-tachyon luci-i18n-tachyon-ru tachyon-core" \
             FILES="${{ github.workspace }}/files" \
             EXTRA_IMAGE_NAME="tachyon"
 
