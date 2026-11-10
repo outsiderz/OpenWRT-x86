@@ -133,6 +133,33 @@ jobs:
             '*/staging_dir/host/lib/*'
           apk_tool="$apk_root/bin/apk"
           test -x "$apk_tool"
+          core_archive="$(find "$RUNNER_TEMP/tachyon-core" -maxdepth 1 -type f -name "tachyon-core-x86_64-*.apk" -print -quit)"
+          test -n "$core_archive"
+          core_stage="$RUNNER_TEMP/tachyon-core-root"
+          core_scripts="$RUNNER_TEMP/tachyon-core-scripts"
+          mkdir -p "$core_stage" "$core_scripts"
+          tar -xzf "$core_archive" -C "$core_stage"
+          core_version="$(grep "^pkgver =" "$core_stage/.PKGINFO" | cut -d= -f2- | xargs)"
+          test -n "$core_version"
+          cp "$core_stage/.post-install" "$core_scripts/post-install"
+          cp "$core_stage/.post-upgrade" "$core_scripts/post-upgrade"
+          cp "$core_stage/.pre-deinstall" "$core_scripts/pre-deinstall"
+          rm -f "$core_stage/.PKGINFO" "$core_stage/.post-install" "$core_stage/.post-upgrade" "$core_stage/.pre-deinstall"
+          rm -f "$RUNNER_TEMP/imagebuilder/packages/$(basename "$core_archive")"
+          "$apk_tool" mkpkg \
+            --info "name:tachyon-core" \
+            --info "version:$core_version" \
+            --info "arch:x86_64" \
+            --info "description:Tachyon routing and proxy core" \
+            --info "license:GPL-3.0-only" \
+            --info "origin:Dushnilin/tachyon-core" \
+            --info "url:https://github.com/Dushnilin/tachyon-core" \
+            --info "depends:libc" \
+            --script "post-install:$core_scripts/post-install" \
+            --script "post-upgrade:$core_scripts/post-upgrade" \
+            --script "pre-deinstall:$core_scripts/pre-deinstall" \
+            --files "$core_stage" \
+            --output "$RUNNER_TEMP/imagebuilder/packages/tachyon-core-$core_version.apk"
           for package in "$RUNNER_TEMP/imagebuilder/packages/"*.apk; do
             metadata="$("$apk_tool" adbdump "$package")"
             package_name="$(printf "%s\n" "$metadata" | grep "^  name:" | head -n1)"
