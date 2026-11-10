@@ -1,0 +1,106 @@
+name: Build OpenWrt Tachyon image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tachyon-image
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      OPENWRT_VERSION: 25.12.6
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout image configuration
+        uses: actions/checkout@v5
+
+      - name: Install build prerequisites
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl fakeroot file gawk git jq make patch perl python3 rsync tar unzip util-linux wget xz-utils zstd
+
+      - name: Resolve Tachyon release
+        id: tachyon_release
+        run: |
+          tag="$(gh release view --repo Dushnilin/tachyon --json tagName --jq .tagName)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Tachyon sources
+        uses: actions/checkout@v5
+        with:
+          repository: Dushnilin/tachyon
+          ref: ${{ steps.tachyon_release.outputs.tag }}
+          path: upstream/tachyon
+          persist-credentials: false
+
+      - name: Build Tachyon packages for OpenWrt 25.12.6
+        run: |
+          sdk="https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/x86/64/openwrt-sdk-${OPENWRT_VERSION}-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
+          mkdir -p "$RUNNER_TEMP/tachyon-packages"
+          cd upstream/tachyon
+          APK_SDK_URL="$sdk" IPK_SDK_URL="$sdk" ./build.sh "${{ steps.tachyon_release.outputs.version }}" "$RUNNER_TEMP/tachyon-packages"
+
+      - name: Download and verify tachyon-core
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/tachyon-core"
+          mkdir -p "$dir"
+          tag="$(gh release view --repo Dushnilin/tachyon-core --json tagName --jq .tagName)"
+          gh release download "$tag" --repo Dushnilin/tachyon-core --pattern 'tachyon-core-x86_64-*.apk' --pattern SHA256SUMS --dir "$dir"
+          core="$(find "$dir" -maxdepth 1 -type f -name 'tachyon-core-x86_64-*.apk' -print -quit)"
+          test -n "$core"
+          name="$(basename "$core")"
+          expected="$(awk -v n="$name" '$2 == n || $2 == "./" n {print $1; exit}' "$dir/SHA256SUMS")"
+          test -n "$expected"
+          actual="$(sha256sum "$core" | awk '{print $1}')"
+          test "$expected" = "$actual"
+          cp "$core" "$RUNNER_TEMP/tachyon-packages/"
+
+      - name: Download OpenWrt ImageBuilder
+        shell: bash
+        run: |
+          url="https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/x86/64/openwrt-imagebuilder-${OPENWRT_VERSION}-x86-64.Linux-x86_64.tar.zst"
+          archive="$RUNNER_TEMP/imagebuilder.tar.zst"
+          curl --fail --location --retry 3 "$url" -o "$archive"
+          echo "a792e29bd2233cda67a0823030bfb53c0b61fbb3836b2063e88adf89730d563b  $archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/imagebuilder"
+          tar --zstd -xf "$archive" -C "$RUNNER_TEMP/imagebuilder" --strip-components=1
+          cp "$RUNNER_TEMP/tachyon-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
+          cp "$RUNNER_TEMP/tachyon-core/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
+          chmod 0755 files/etc/uci-defaults/99-home-router-network
+
+      - name: Build UEFI EXT4 firmware
+        working-directory: ${{ runner.temp }}/imagebuilder
+        run: |
+          make image PROFILE=generic \
+            PACKAGES="luci-ssl luci-i18n-base-ru luci-theme-argon kmod-r8169 r8169-firmware tachyon luci-app-tachyon luci-i18n-tachyon-ru tachyon-core" \
+            FILES="${{ github.workspace }}/files" \
+            EXTRA_IMAGE_NAME="tachyon"
+
+      - name: Prepare firmware artifact
+        shell: bash
+        working-directory: ${{ runner.temp }}/imagebuilder
+        run: |
+          image="$(find bin -type f -name "openwrt-${OPENWRT_VERSION}-x86-64-generic-ext4-combined-efi.img.gz" -print -quit)"
+          test -n "$image"
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          cp "$image" "$GITHUB_WORKSPACE/output/openwrt-${OPENWRT_VERSION}-x86-64-tachyon-core-ext4-efi.img.gz"
+          cd "$GITHUB_WORKSPACE/output"
+          sha256sum *.img.gz > SHA256SUMS
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-${{ env.OPENWRT_VERSION }}-tachyon-core-x86-64
+          path: output/*
+          if-no-files-found: error
+          retention-days: 30
