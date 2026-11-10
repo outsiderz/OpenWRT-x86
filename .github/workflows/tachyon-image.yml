@@ -226,7 +226,7 @@ jobs:
         shell: bash
         working-directory: ${{ runner.temp }}/imagebuilder
         run: |
-          image="$(find bin -type f -name "openwrt-${OPENWRT_VERSION}-x86-64-generic*ext4-combined-efi.img.gz" -print -quit)"
+          image="$(find bin -type f -name "openwrt-${OPENWRT_VERSION}-tachyon-x86-64-generic*ext4-combined-efi.img.gz" -print -quit)"
           test -n "$image"
           mkdir -p "$GITHUB_WORKSPACE/output"
           cp "$image" "$GITHUB_WORKSPACE/output/openwrt-${OPENWRT_VERSION}-x86-64-tachyon-core-ext4-efi.img.gz"
