@@ -87,7 +87,7 @@ jobs:
           cp -a "$GITHUB_WORKSPACE/upstream/luci-theme-argon" package/luci-theme-argon
           make package/luci-theme-argon/compile -j"$(nproc)"
           mkdir -p "$RUNNER_TEMP/argon-packages"
-          find bin/packages -type f \\( -name 'luci-theme-argon_*.apk' -o -name 'luci-i18n-argon-config-ru_*.apk' \\) -exec cp -t "$RUNNER_TEMP/argon-packages" {} +
+          find bin/packages -type f \( -name 'luci-theme-argon_*.apk' -o -name 'luci-i18n-argon-config-ru_*.apk' \) -exec cp -t "$RUNNER_TEMP/argon-packages" {} +
           test -n "$(find "$RUNNER_TEMP/argon-packages" -type f -name 'luci-theme-argon_*.apk' -print -quit)"
 
       - name: Download OpenWrt ImageBuilder
