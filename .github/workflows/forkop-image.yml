@@ -64,6 +64,10 @@ jobs:
           test -n "$expected"
           actual="$(sha256sum "$core" | awk '{print $1}')"
           test "$expected" = "$actual"
+          required="$(sed -n 's/.*SB_REQUIRED_VERSION: "\([^"]*\)".*/\1/p' upstream/forkop/forkop/files/usr/lib/core/constants.uc)"
+          core_version="$(printf '%s' "$name" | sed -E 's/^sing-box-forkop_([^_]+)_full_x86_64\.apk$/\1/')"
+          test -n "$required"
+          test "$required" = "$core_version"
           cp "$core" "$RUNNER_TEMP/forkop-packages/"
 
       - name: Download OpenWrt ImageBuilder
