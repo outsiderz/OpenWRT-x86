@@ -145,6 +145,18 @@ jobs:
             '*/staging_dir/host/lib/*'
           apk_tool="$apk_root/bin/apk"
           test -x "$apk_tool"
+          for package in "$RUNNER_TEMP/forkop-packages/"*.apk "$RUNNER_TEMP/forkop-core/"*.apk "$RUNNER_TEMP/argon-packages/"*.apk; do
+            metadata="$("$apk_tool" adbdump "$package")"
+            package_name="$(printf "%s\n" "$metadata" | grep "^  name:" | head -n1)"
+            package_version="$(printf "%s\n" "$metadata" | grep "^  version:" | head -n1)"
+            package_name="${package_name#*: }"
+            package_version="${package_version#*: }"
+            test -n "$package_name"
+            test -n "$package_version"
+            source="$RUNNER_TEMP/imagebuilder/packages/$(basename "$package")"
+            target="$RUNNER_TEMP/imagebuilder/packages/$package_name-$package_version.apk"
+            if [ "$source" != "$target" ]; then mv "$source" "$target"; fi
+          done
           make -s -C "$RUNNER_TEMP/imagebuilder" _check_keys
           (
             cd "$RUNNER_TEMP/imagebuilder/packages"
