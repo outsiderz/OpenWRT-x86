@@ -65,33 +65,28 @@ jobs:
           test "$expected" = "$actual"
           cp "$core" "$RUNNER_TEMP/tachyon-packages/"
 
-      - name: Checkout Argon theme sources
-        uses: actions/checkout@v5
-        with:
-          repository: jerrykuku/luci-theme-argon
-          path: upstream/luci-theme-argon
-          persist-credentials: false
-
-      - name: Build Argon packages for OpenWrt 25.12.6
+      - name: Download and verify Argon release packages
         shell: bash
         run: |
-          sdk="https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/x86/64/openwrt-sdk-${OPENWRT_VERSION}-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst"
-          archive="$RUNNER_TEMP/argon-sdk.tar.zst"
-          sdk_dir="$RUNNER_TEMP/argon-sdk"
-          curl --fail --location --retry 3 "$sdk" -o "$archive"
-          mkdir -p "$sdk_dir"
-          tar --zstd -xf "$archive" -C "$sdk_dir" --strip-components=1
-          cd "$sdk_dir"
-          export TERM=xterm
-          ./scripts/feeds update -a
-          ./scripts/feeds install -a
-          rm -rf package/luci-theme-argon
-          cp -a "$GITHUB_WORKSPACE/upstream/luci-theme-argon" package/luci-theme-argon
-          make defconfig
-          make package/luci-theme-argon/compile -j"$(nproc)"
-          mkdir -p "$RUNNER_TEMP/argon-packages"
-          find bin/packages -type f \( -name 'luci-theme-argon_*.apk' -o -name 'luci-i18n-argon-config-ru_*.apk' \) -exec cp -t "$RUNNER_TEMP/argon-packages" {} +
-          test -n "$(find "$RUNNER_TEMP/argon-packages" -type f -name 'luci-theme-argon_*.apk' -print -quit)"
+          dir="$RUNNER_TEMP/argon-packages"
+          mkdir -p "$dir"
+          tag="$(gh release view --repo jerrykuku/luci-theme-argon --json tagName --jq .tagName)"
+          gh release download "$tag" --repo jerrykuku/luci-theme-argon \
+            --pattern 'luci-theme-argon-*.apk' \
+            --pattern 'luci-app-argon-config-*.apk' \
+            --pattern 'luci-i18n-argon-config-ru-*.apk' \
+            --dir "$dir"
+          release_json="$(gh api "repos/jerrykuku/luci-theme-argon/releases/tags/$tag")"
+          for package in "$dir"/*.apk; do
+            name="$(basename "$package")"
+            expected="$(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .digest | sub("^sha256:"; "")' <<< "$release_json")"
+            test -n "$expected"
+            actual="$(sha256sum "$package" | awk '{print $1}')"
+            test "$expected" = "$actual"
+          done
+          test -n "$(find "$dir" -maxdepth 1 -type f -name 'luci-theme-argon-*.apk' -print -quit)"
+          test -n "$(find "$dir" -maxdepth 1 -type f -name 'luci-app-argon-config-*.apk' -print -quit)"
+          test -n "$(find "$dir" -maxdepth 1 -type f -name 'luci-i18n-argon-config-ru-*.apk' -print -quit)"
 
       - name: Download OpenWrt ImageBuilder
         shell: bash
@@ -105,6 +100,7 @@ jobs:
           cp "$RUNNER_TEMP/tachyon-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
           cp "$RUNNER_TEMP/tachyon-core/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
           cp "$RUNNER_TEMP/argon-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
+          cp "$RUNNER_TEMP/argon-packages/"*.apk "$RUNNER_TEMP/imagebuilder/packages/"
           chmod 0755 files/etc/uci-defaults/99-home-router-network
           ls -lh "$RUNNER_TEMP/imagebuilder/packages/"*.apk
           (
@@ -117,7 +113,7 @@ jobs:
         working-directory: ${{ runner.temp }}/imagebuilder
         run: |
           make image PROFILE=generic \
-            PACKAGES="luci-ssl luci-i18n-base-ru luci-theme-argon kmod-r8169 r8169-firmware tachyon luci-app-tachyon luci-i18n-tachyon-ru tachyon-core" \
+            PACKAGES="luci-ssl luci-i18n-base-ru luci-theme-argon luci-app-argon-config luci-i18n-argon-config-ru kmod-r8169 r8169-firmware tachyon luci-app-tachyon luci-i18n-tachyon-ru tachyon-core" \
             FILES="${{ github.workspace }}/files" \
             EXTRA_IMAGE_NAME="tachyon"
 
